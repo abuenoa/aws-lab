@@ -1,0 +1,18 @@
+# NodePort service exposing the web frontend
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-web
+  labels:
+    app.kubernetes.io/name: minishop-web
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  type: NodePort
+  selector:
+    app.kubernetes.io/name: minishop-web
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  ports:
+    - name: http
+      port: {{ .Values.web.service.port }}
+      targetPort: {{ .Values.web.service.port }}
+      nodePort: {{ .Values.web.service.nodePort }}

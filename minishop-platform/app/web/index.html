@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MiniShop Platform</title>
+    <style>
+      body { font-family: Arial, sans-serif; margin: 40px; }
+      .card { max-width: 520px; padding: 24px; border: 1px solid #ddd; border-radius: 8px; }
+      h1 { margin-top: 0; }
+      button { padding: 8px 12px; }
+      pre { background: #f6f8fa; padding: 12px; border-radius: 6px; }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>MiniShop Platform</h1>
+      <p>This page calls the API through the Kubernetes ClusterIP service.</p>
+      <button id="btn">Fetch message</button>
+      <pre id="out">Click the button to call /api/message</pre>
+    </div>
+    <script>
+      const out = document.getElementById('out');
+      document.getElementById('btn').addEventListener('click', async () => {
+        out.textContent = 'Loading...';
+        try {
+          const res = await fetch('/api/message');
+          const data = await res.json();
+          out.textContent = JSON.stringify(data, null, 2);
+        } catch (err) {
+          out.textContent = 'Error: ' + err;
+        }
+      });
+    </script>
+  </body>
+</html>
