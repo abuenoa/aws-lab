@@ -38,7 +38,7 @@ The demo deploys a tiny FastAPI backend and an nginx web frontend to a single `t
 - Terraform installed
 - SSH client
 - Docker and Docker Compose (for local testing)
- - (Optional) AWS CLI installed for `aws configure`
+- (Optional) AWS CLI installed for `aws configure`
 
 ## Configuration (Externalized Inputs)
 
@@ -69,6 +69,8 @@ cp terraform.tfvars.example terraform.tfvars
 Update `terraform.tfvars` with:
 - `ssh_key_name`: your EC2 key pair name
 - `ssh_cidr`: your public IP in CIDR notation (e.g., `203.0.113.10/32`)
+ - `instance_type`: instance size (default `t3.micro`)
+ - `aws_region`: AWS region (e.g., `us-east-1`)
 
 **Docker Compose (local lab)**
 
@@ -82,70 +84,95 @@ You can override:
 - `API_IMAGE`, `API_TAG` for the backend image
 - `API_PORT`, `WEB_PORT` for local ports
 
-## Learning Lab: What Each Layer Teaches You
+## Step-by-Step Deployment (Detailed)
 
-- **Terraform (IaC)**: Reproducible infrastructure. You define *what* you want (EC2, security group) and Terraform makes it real, reliably and repeatably.
-- **EC2 (Compute)**: A real VM where Kubernetes will run. This mirrors how teams often bootstrap clusters on raw compute.
-- **k3s (Kubernetes)**: A lightweight, production-grade Kubernetes distribution that fits a single Free Tier instance.
-- **Helm (Packaging)**: A standard way to package and deploy Kubernetes apps with configurable values.
-- **App (FastAPI + nginx)**: A minimal but realistic two-tier application that demonstrates service discovery and internal routing.
+### Step 1 — Log in to AWS (Credentials)
 
-## Step-by-Step Deployment
+You need valid AWS credentials on your machine so Terraform can create resources.
 
-### Step 1 — Configure AWS credentials
+**Option A: AWS CLI (recommended)**
+```
+aws configure
+```
 
-Set up your AWS credentials so Terraform can create resources.
+It will prompt for:
+- AWS Access Key ID
+- AWS Secret Access Key
+- Default region (e.g., `us-east-1`)
+- Output format (you can leave it blank)
 
+**Option B: Environment variables**
 ```
 export AWS_ACCESS_KEY_ID=YOUR_KEY
 export AWS_SECRET_ACCESS_KEY=YOUR_SECRET
 export AWS_DEFAULT_REGION=us-east-1
 ```
 
-### Step 2 — Terraform init / apply
+### Step 2 — Set Terraform Variables
 
+Copy the example file and edit it:
 ```
 cd minishop-platform/terraform
 cp terraform.tfvars.example terraform.tfvars
+```
 
-# Edit terraform.tfvars with your key pair name and IP
+Update these fields in `terraform.tfvars`:
+- `aws_region`: region for the EC2 instance
+- `ssh_key_name`: the exact name of your EC2 key pair
+- `ssh_cidr`: your public IP in CIDR notation (e.g., `X.X.X.X/32`)
+- `instance_type`: defaults to `t3.micro` (Free Tier eligible)
+
+### Step 3 — Provision Infrastructure
+
+```
 terraform init
 terraform apply
 ```
 
-Terraform will output the EC2 public IP after apply.
+Terraform will output:
+- `instance_public_ip`
+- `instance_public_dns`
 
-### Step 3 — SSH into instance
+### Step 4 — SSH into the EC2 Instance
 
 ```
 ssh -i /path/to/your-key.pem ec2-user@<EC2_PUBLIC_IP>
 ```
 
-### Step 4 — Install k3s
+If you get a permission error, ensure your `.pem` has correct permissions:
+```
+chmod 400 /path/to/your-key.pem
+```
+
+### Step 5 — Install k3s
 
 ```
 cd minishop-platform/bootstrap
 ./install_k3s.sh
 ```
 
-### Step 5 — Install Helm
+Verify:
+```
+kubectl get nodes
+```
+
+### Step 6 — Install Helm
 
 ```
 ./install_helm.sh
+helm version
 ```
 
-### Step 6 — Deploy Helm chart
+### Step 7 — Deploy the Application with Helm
 
 Build and push the API image (example):
-
 ```
 cd minishop-platform/app/api
 # docker build -t ghcr.io/your-org/minishop-api:latest .
 # docker push ghcr.io/your-org/minishop-api:latest
 ```
 
-Then deploy the chart:
-
+Install the chart:
 ```
 cd minishop-platform/helm/minishop-chart
 helm install minishop . \
@@ -153,17 +180,22 @@ helm install minishop . \
   --set api.image.tag=latest
 ```
 
-The web service is exposed via NodePort `30080` by default.
+### Step 8 — Access the Application
 
-### Step 7 — Access the application
-
-In your browser:
-
+Open in your browser:
 ```
 http://<EC2_PUBLIC_IP>:30080
 ```
 
-Click **Fetch message** to call the API.
+Click **Fetch message** to call the backend.
+
+## Learning Lab: What Each Layer Teaches You
+
+- **Terraform (IaC)**: Reproducible infrastructure. You define *what* you want (EC2, security group) and Terraform makes it real, reliably and repeatably.
+- **EC2 (Compute)**: A real VM where Kubernetes will run. This mirrors how teams often bootstrap clusters on raw compute.
+- **k3s (Kubernetes)**: A lightweight, production-grade Kubernetes distribution that fits a single Free Tier instance.
+- **Helm (Packaging)**: A standard way to package and deploy Kubernetes apps with configurable values.
+- **App (FastAPI + nginx)**: A minimal but realistic two-tier application that demonstrates service discovery and internal routing.
 
 ## Local Lab: Run Everything with Docker Compose
 
