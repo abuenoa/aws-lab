@@ -24,33 +24,39 @@ if ! command -v curl >/dev/null 2>&1; then
   sudo yum install -y curl
 fi
 
-if command -v k3s >/dev/null 2>&1; then
-  log "k3s is already installed. Skipping installation."
+if sudo systemctl is-active --quiet k3s; then
+  log "k3s service is already running. Skipping installation."
 else
   if [[ "$is_amazon_linux_2" == "true" ]]; then
     log "Amazon Linux 2 detected. Skipping SELinux RPM to avoid container-selinux conflicts."
     log "This is a lab-friendly workaround and is sufficient for this demo."
-    curl -sfL https://get.k3s.io | INSTALL_K3S_SKIP_SELINUX_RPM=true sh -
-  else
-    log "Installing k3s (single-node Kubernetes)..."
-    curl -sfL https://get.k3s.io | sh -
   fi
+  log "Installing k3s (single-node Kubernetes)..."
+  curl -sfL https://get.k3s.io | INSTALL_K3S_SKIP_SELINUX_RPM=true sh -
 fi
 
-log "Configuring kubectl for current user..."
+log "Ensuring k3s service is enabled and running..."
+sudo systemctl enable --now k3s
+if ! sudo systemctl is-active --quiet k3s; then
+  log "k3s service is not active. Showing recent logs:"
+  sudo journalctl -u k3s --no-pager -n 50
+  exit 1
+fi
+
+log "Ensuring kubectl is available..."
+sudo ln -sf /usr/local/bin/k3s /usr/local/bin/kubectl
+
+log "Configuring kubeconfig for current user..."
 export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
 sudo chmod 644 /etc/rancher/k3s/k3s.yaml
+if ! grep -q "export KUBECONFIG=/etc/rancher/k3s/k3s.yaml" "$HOME/.bashrc" 2>/dev/null; then
+  echo "export KUBECONFIG=/etc/rancher/k3s/k3s.yaml" >> "$HOME/.bashrc"
+fi
 
 log "Validating Kubernetes node readiness..."
-for i in {1..30}; do
-  if kubectl get nodes >/dev/null 2>&1 && kubectl get nodes | grep -q " Ready "; then
-    log "Node is Ready and kubectl is working."
-    kubectl get nodes
-    exit 0
-  fi
-  sleep 5
-  log "Still waiting..."
-done
+if ! kubectl get nodes; then
+  log "kubectl validation failed. Ensure KUBECONFIG is set and k3s is running."
+  exit 1
+fi
 
-log "Timed out waiting for node readiness. Check 'kubectl get nodes'."
-exit 1
+log "k3s installation complete."
