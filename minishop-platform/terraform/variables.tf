@@ -18,3 +18,9 @@ variable "instance_name" {
   type        = string
   default     = "minishop-k3s"
 }
+
+variable "instance_type" {
+  description = "EC2 instance type for the k3s node (Free Tier eligible)."
+  type        = string
+  default     = "t3.micro"
+}

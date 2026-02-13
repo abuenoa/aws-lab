@@ -87,7 +87,7 @@ resource "aws_security_group" "minishop_sg" {
 # Single EC2 instance (Free Tier compatible) hosting k3s.
 resource "aws_instance" "minishop" {
   ami                    = data.aws_ami.amazon_linux_2.id
-  instance_type          = "t2.micro"
+  instance_type          = var.instance_type
   subnet_id              = data.aws_subnets.default.ids[0]
   vpc_security_group_ids = [aws_security_group.minishop_sg.id]
   key_name               = var.ssh_key_name
