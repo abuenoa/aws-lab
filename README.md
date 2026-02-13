@@ -161,7 +161,7 @@ git clone https://github.com/<YOUR_ORG>/<YOUR_REPO>.git
 cd <YOUR_REPO>
 ```
 
-### Step 5 — Install k3s
+### Step 5 — Install k3s (on the EC2 instance)
 
 ```
 cd bootstrap
@@ -171,6 +171,27 @@ cd bootstrap
 Verify:
 ```
 kubectl get nodes
+```
+
+## Troubleshooting (Amazon Linux 2)
+
+If you see errors like:
+```
+k3s-selinux ... Needs: container-selinux < 2:2.164.2
+k3s-selinux ... Needs: container-selinux >= 2:2.107-3
+```
+
+**Why it happens**  
+k3s tries to install the `k3s-selinux` RPM. Amazon Linux 2 often has a
+`container-selinux` version mismatch, which causes the install to fail.
+
+**What this lab does**  
+The bootstrap script skips the SELinux RPM on Amazon Linux 2. k3s still works
+for this lab, and this avoids the dependency conflict.
+
+**Manual workaround (if needed)**
+```
+curl -sfL https://get.k3s.io | INSTALL_K3S_SKIP_SELINUX_RPM=true sh -
 ```
 
 ### Step 6 — Install Helm

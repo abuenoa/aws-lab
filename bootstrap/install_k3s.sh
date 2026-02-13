@@ -5,6 +5,15 @@ log() {
   echo "[k3s] $1"
 }
 
+is_amazon_linux_2=false
+if [[ -f /etc/os-release ]]; then
+  # shellcheck disable=SC1091
+  . /etc/os-release
+  if [[ "${NAME:-}" == "Amazon Linux" && "${VERSION_ID:-}" == "2" ]]; then
+    is_amazon_linux_2=true
+  fi
+fi
+
 if [[ $(id -u) -eq 0 ]]; then
   log "Please run this script as a non-root user with sudo privileges."
   exit 1
@@ -15,20 +24,27 @@ if ! command -v curl >/dev/null 2>&1; then
   sudo yum install -y curl
 fi
 
-log "Installing k3s (single-node Kubernetes)..."
-curl -sfL https://get.k3s.io | sh -
+if command -v k3s >/dev/null 2>&1; then
+  log "k3s is already installed. Skipping installation."
+else
+  if [[ "$is_amazon_linux_2" == "true" ]]; then
+    log "Amazon Linux 2 detected. Skipping SELinux RPM to avoid container-selinux conflicts."
+    log "This is a lab-friendly workaround and is sufficient for this demo."
+    curl -sfL https://get.k3s.io | INSTALL_K3S_SKIP_SELINUX_RPM=true sh -
+  else
+    log "Installing k3s (single-node Kubernetes)..."
+    curl -sfL https://get.k3s.io | sh -
+  fi
+fi
 
 log "Configuring kubectl for current user..."
-mkdir -p "$HOME/.kube"
-sudo cp /etc/rancher/k3s/k3s.yaml "$HOME/.kube/config"
-sudo chown "$(id -u):$(id -g)" "$HOME/.kube/config"
+export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+sudo chmod 644 /etc/rancher/k3s/k3s.yaml
 
-export KUBECONFIG="$HOME/.kube/config"
-
-log "Waiting for node to be Ready..."
+log "Validating Kubernetes node readiness..."
 for i in {1..30}; do
-  if kubectl get nodes 2>/dev/null | grep -q " Ready "; then
-    log "Node is Ready."
+  if kubectl get nodes >/dev/null 2>&1 && kubectl get nodes | grep -q " Ready "; then
+    log "Node is Ready and kubectl is working."
     kubectl get nodes
     exit 0
   fi
