@@ -70,7 +70,7 @@ export AWS_DEFAULT_REGION=eu-west-1
 **Terraform variables**
 
 ```
-cd minishop-platform/terraform
+cd terraform
 cp terraform.tfvars.example terraform.tfvars
 ```
 
@@ -84,7 +84,7 @@ Update `terraform.tfvars` with:
 
 Copy the example environment file:
 ```
-cd minishop-platform
+cd <YOUR_REPO>
 cp .env.example .env
 ```
 
@@ -106,7 +106,7 @@ aws configure
 It will prompt for:
 - AWS Access Key ID
 - AWS Secret Access Key
-- Default region (e.g., `us-east-1`)
+- Default region (e.g., `eu-west-1`)
 - Output format (you can leave it blank)
 
 **Option B: Environment variables**
@@ -120,7 +120,7 @@ export AWS_DEFAULT_REGION=eu-west-1
 
 Copy the example file and edit it:
 ```
-cd minishop-platform/terraform
+cd terraform
 cp terraform.tfvars.example terraform.tfvars
 ```
 
@@ -158,7 +158,7 @@ Install Git and clone the repo (Amazon Linux):
 ```
 sudo yum install -y git
 git clone https://github.com/<YOUR_ORG>/<YOUR_REPO>.git
-cd <YOUR_REPO>/minishop-platform
+cd <YOUR_REPO>
 ```
 
 ### Step 5 — Install k3s
@@ -196,7 +196,7 @@ helm install minishop . \
 
 Build on your **local machine**, then push to Docker Hub or GHCR:
 ```
-cd minishop-platform/app/api
+cd app/api
 # docker build -t ghcr.io/your-org/minishop-api:latest .
 # docker push ghcr.io/your-org/minishop-api:latest
 ```
@@ -231,7 +231,7 @@ Click **Fetch message** to call the backend.
 This is a quick way to test the app locally before deploying to AWS.
 
 ```
-cd minishop-platform
+cd <YOUR_REPO>
 cp .env.example .env
 docker compose up --build
 ```
@@ -297,7 +297,7 @@ Click **Fetch message**. This tests:
 
 Run this **locally** where you executed Terraform:
 ```
-cd minishop-platform/terraform
+cd terraform
 terraform destroy
 ```
 
@@ -305,7 +305,6 @@ Verify cleanup:
 - AWS Console: no running EC2 instance
 - Security group removed
 - Key pair remains (delete it manually only if you want)
-```
 
 ## Cost-Safety Notes (Free Tier)
 
