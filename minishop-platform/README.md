@@ -11,7 +11,7 @@ The demo deploys a tiny FastAPI backend and an nginx web frontend to a single `t
 - A k3s Kubernetes cluster on EC2
 - Helm-based application deployment
 - A simple web page calling an internal API
- - A local Docker Compose option for quick testing
+- A local Docker Compose option for quick testing
 
 ## Architecture (ASCII)
 
@@ -40,6 +40,14 @@ The demo deploys a tiny FastAPI backend and an nginx web frontend to a single `t
 - Docker and Docker Compose (for local testing)
 - (Optional) AWS CLI installed for `aws configure`
 
+## Execution Model (Local vs EC2)
+
+To avoid confusion, the lab is split into two execution environments:
+
+- **Local machine**: Configure AWS credentials, run `terraform init/apply/destroy`, and (optionally) build/push the API image.
+- **EC2 instance**: Install k3s, install Helm, and run `helm install/upgrade` + `kubectl` commands.
+- **Image registry**: The API image must be stored in a registry that the EC2 instance can pull from (Docker Hub, GHCR, or ECR).
+
 ## Configuration (Externalized Inputs)
 
 This lab avoids hardcoded credentials or IPs. You provide them via environment variables and `.tfvars` files.
@@ -56,7 +64,7 @@ Option B — Environment variables:
 ```
 export AWS_ACCESS_KEY_ID=YOUR_KEY
 export AWS_SECRET_ACCESS_KEY=YOUR_SECRET
-export AWS_DEFAULT_REGION=us-east-1
+export AWS_DEFAULT_REGION=eu-west-1
 ```
 
 **Terraform variables**
@@ -69,8 +77,8 @@ cp terraform.tfvars.example terraform.tfvars
 Update `terraform.tfvars` with:
 - `ssh_key_name`: your EC2 key pair name
 - `ssh_cidr`: your public IP in CIDR notation (e.g., `203.0.113.10/32`)
- - `instance_type`: instance size (default `t3.micro`)
- - `aws_region`: AWS region (e.g., `us-east-1`)
+- `instance_type`: instance size (default `t3.micro`)
+- `aws_region`: AWS region (e.g., `eu-west-1`)
 
 **Docker Compose (local lab)**
 
@@ -105,7 +113,7 @@ It will prompt for:
 ```
 export AWS_ACCESS_KEY_ID=YOUR_KEY
 export AWS_SECRET_ACCESS_KEY=YOUR_SECRET
-export AWS_DEFAULT_REGION=us-east-1
+export AWS_DEFAULT_REGION=eu-west-1
 ```
 
 ### Step 2 — Set Terraform Variables
@@ -144,10 +152,19 @@ If you get a permission error, ensure your `.pem` has correct permissions:
 chmod 400 /path/to/your-key.pem
 ```
 
+### Step 4.1 — Clone the repository on the EC2 instance
+
+Install Git and clone the repo (Amazon Linux):
+```
+sudo yum install -y git
+git clone https://github.com/<YOUR_ORG>/<YOUR_REPO>.git
+cd <YOUR_REPO>/minishop-platform
+```
+
 ### Step 5 — Install k3s
 
 ```
-cd minishop-platform/bootstrap
+cd bootstrap
 ./install_k3s.sh
 ```
 
@@ -165,16 +182,28 @@ helm version
 
 ### Step 7 — Deploy the Application with Helm
 
-Build and push the API image (example):
+**Option A (Recommended for class): Use a public prebuilt image**
+
+This avoids installing Docker on the EC2 instance.
+```
+cd helm/minishop-chart
+helm install minishop . \
+  --set api.image.repository=ghcr.io/abuenoa/minishop-api \
+  --set api.image.tag=latest
+```
+
+**Option B (Advanced): Build and push your own image**
+
+Build on your **local machine**, then push to Docker Hub or GHCR:
 ```
 cd minishop-platform/app/api
 # docker build -t ghcr.io/your-org/minishop-api:latest .
 # docker push ghcr.io/your-org/minishop-api:latest
 ```
 
-Install the chart:
+Then deploy from the EC2 instance:
 ```
-cd minishop-platform/helm/minishop-chart
+cd helm/minishop-chart
 helm install minishop . \
   --set api.image.repository=ghcr.io/your-org/minishop-api \
   --set api.image.tag=latest
