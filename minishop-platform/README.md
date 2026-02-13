@@ -4,7 +4,7 @@
 
 Terraform → EC2 (Free Tier) → k3s (single-node Kubernetes) → Helm → App deployment
 
-The demo deploys a tiny FastAPI backend and an nginx web frontend to a single `t2.micro` instance.
+The demo deploys a tiny FastAPI backend and an nginx web frontend to a single `t3.micro` instance.
 
 **What you get**
 - AWS infrastructure created by Terraform
@@ -24,7 +24,7 @@ The demo deploys a tiny FastAPI backend and an nginx web frontend to a single `t
                                   v
 +------------------+    +---------+---------+    +------------------+
 |   AWS EC2        |    |  k3s Node        |    |   Kubernetes     |
-|  t2.micro        |----|  (single node)   |----|   Services       |
+|  t3.micro        |----|  (single node)   |----|   Services       |
 |  Security Group  |    |                 |    |                  |
 +------------------+    |  Web (nginx)    |    |  ClusterIP API   |
                          |  API (FastAPI) |    +------------------+
@@ -295,14 +295,21 @@ Click **Fetch message**. This tests:
 
 ## Cleanup (Destroy All Resources)
 
+Run this **locally** where you executed Terraform:
 ```
 cd minishop-platform/terraform
 terraform destroy
 ```
 
+Verify cleanup:
+- AWS Console: no running EC2 instance
+- Security group removed
+- Key pair remains (delete it manually only if you want)
+```
+
 ## Cost-Safety Notes (Free Tier)
 
-- This project uses **one `t2.micro`** instance and the default VPC.
+- This project uses **one `t3.micro`** instance and the default VPC.
 - Keep the instance running only while you are practicing.
 - Always run `terraform destroy` when finished.
 
