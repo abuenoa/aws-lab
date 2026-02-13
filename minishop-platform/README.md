@@ -11,6 +11,7 @@ The demo deploys a tiny FastAPI backend and an nginx web frontend to a single `t
 - A k3s Kubernetes cluster on EC2
 - Helm-based application deployment
 - A simple web page calling an internal API
+ - A local Docker Compose option for quick testing
 
 ## Architecture (ASCII)
 
@@ -36,6 +37,15 @@ The demo deploys a tiny FastAPI backend and an nginx web frontend to a single `t
 - An existing EC2 key pair
 - Terraform installed
 - SSH client
+ - Docker and Docker Compose (for local testing)
+
+## Learning Lab: What Each Layer Teaches You
+
+- **Terraform (IaC)**: Reproducible infrastructure. You define *what* you want (EC2, security group) and Terraform makes it real, reliably and repeatably.
+- **EC2 (Compute)**: A real VM where Kubernetes will run. This mirrors how teams often bootstrap clusters on raw compute.
+- **k3s (Kubernetes)**: A lightweight, production-grade Kubernetes distribution that fits a single Free Tier instance.
+- **Helm (Packaging)**: A standard way to package and deploy Kubernetes apps with configurable values.
+- **App (FastAPI + nginx)**: A minimal but realistic two-tier application that demonstrates service discovery and internal routing.
 
 ## Step-by-Step Deployment
 
@@ -111,6 +121,72 @@ http://<EC2_PUBLIC_IP>:30080
 ```
 
 Click **Fetch message** to call the API.
+
+## Local Lab: Run Everything with Docker Compose
+
+This is a quick way to test the app locally before deploying to AWS.
+
+```
+cd minishop-platform
+docker compose up --build
+```
+
+Access:
+- Web: `http://localhost:30080`
+- API health: `http://localhost:8000/health`
+- API message: `http://localhost:8000/message`
+
+Stop:
+
+```
+docker compose down
+```
+
+## How to Test (AWS + Kubernetes)
+
+Once deployed on EC2, use these checks to validate each layer.
+
+### 1) Validate Kubernetes is Running
+
+```
+kubectl get nodes
+kubectl get pods -A
+```
+
+Expected: your node is `Ready` and system pods are running.
+
+### 2) Validate Helm Deployment
+
+```
+helm list
+kubectl get deployments
+kubectl get services
+```
+
+Expected:
+- `minishop-api` and `minishop-web` deployments are available
+- `minishop-web` has type `NodePort`
+
+### 3) Validate API Internally
+
+```
+kubectl port-forward svc/minishop-api 18000:8000
+curl http://localhost:18000/health
+curl http://localhost:18000/message
+```
+
+Expected: JSON response from `/health` and `/message`.
+
+### 4) Validate End-to-End (Browser)
+
+```
+http://<EC2_PUBLIC_IP>:30080
+```
+
+Click **Fetch message**. This tests:
+- Public NodePort access
+- Web-to-API routing through ClusterIP
+- API response payload
 
 ## Cleanup (Destroy All Resources)
 
