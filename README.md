@@ -161,7 +161,7 @@ git clone https://github.com/<YOUR_ORG>/<YOUR_REPO>.git
 cd <YOUR_REPO>
 ```
 
-### Step 5 — Install k3s (on the EC2 instance)
+### Step 5 — Install k3s (on the EC2 instance, Amazon Linux 2)
 
 ```
 cd bootstrap
@@ -172,6 +172,11 @@ Verify:
 ```
 kubectl get nodes
 ```
+
+This script is Amazon Linux 2 friendly. It:
+- Skips the SELinux RPM to avoid `container-selinux` conflicts
+- Creates the `kubectl` symlink
+- Exports `KUBECONFIG` for the current user
 
 ## Troubleshooting (Amazon Linux 2)
 
@@ -192,6 +197,17 @@ for this lab, and this avoids the dependency conflict.
 **Manual workaround (if needed)**
 ```
 curl -sfL https://get.k3s.io | INSTALL_K3S_SKIP_SELINUX_RPM=true sh -
+```
+
+If `kubectl` is missing:
+```
+sudo ln -s /usr/local/bin/k3s /usr/local/bin/kubectl
+```
+
+If kubeconfig permissions or env are missing:
+```
+export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+sudo chmod 644 /etc/rancher/k3s/k3s.yaml
 ```
 
 ### Step 6 — Install Helm
