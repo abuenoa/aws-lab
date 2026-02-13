@@ -2,8 +2,8 @@
 api:
   replicaCount: 1
   image:
-    repository: "ghcr.io/your-org/minishop-api"
-    tag: "latest"
+    repository: "tiangolo/uvicorn-gunicorn-fastapi"
+    tag: "python3.11"
   service:
     port: 8000
 
