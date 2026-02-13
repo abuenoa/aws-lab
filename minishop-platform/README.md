@@ -37,7 +37,50 @@ The demo deploys a tiny FastAPI backend and an nginx web frontend to a single `t
 - An existing EC2 key pair
 - Terraform installed
 - SSH client
- - Docker and Docker Compose (for local testing)
+- Docker and Docker Compose (for local testing)
+ - (Optional) AWS CLI installed for `aws configure`
+
+## Configuration (Externalized Inputs)
+
+This lab avoids hardcoded credentials or IPs. You provide them via environment variables and `.tfvars` files.
+
+**AWS credentials (for Terraform)**  
+Use one of these options:
+
+Option A — AWS CLI:
+```
+aws configure
+```
+
+Option B — Environment variables:
+```
+export AWS_ACCESS_KEY_ID=YOUR_KEY
+export AWS_SECRET_ACCESS_KEY=YOUR_SECRET
+export AWS_DEFAULT_REGION=us-east-1
+```
+
+**Terraform variables**
+
+```
+cd minishop-platform/terraform
+cp terraform.tfvars.example terraform.tfvars
+```
+
+Update `terraform.tfvars` with:
+- `ssh_key_name`: your EC2 key pair name
+- `ssh_cidr`: your public IP in CIDR notation (e.g., `203.0.113.10/32`)
+
+**Docker Compose (local lab)**
+
+Copy the example environment file:
+```
+cd minishop-platform
+cp .env.example .env
+```
+
+You can override:
+- `API_IMAGE`, `API_TAG` for the backend image
+- `API_PORT`, `WEB_PORT` for local ports
 
 ## Learning Lab: What Each Layer Teaches You
 
@@ -128,6 +171,7 @@ This is a quick way to test the app locally before deploying to AWS.
 
 ```
 cd minishop-platform
+cp .env.example .env
 docker compose up --build
 ```
 
@@ -209,3 +253,16 @@ terraform destroy
 - How frontend-to-backend communication works inside a cluster
 
 This is a compact, real-world DevOps workflow designed for cloud students.
+
+## End-to-End Lab Execution (Summary)
+
+Use this checklist when teaching or validating the lab:
+
+1. Configure AWS credentials (`aws configure` or env vars).
+1. Set `terraform.tfvars` with `ssh_key_name` and `ssh_cidr`.
+1. `terraform init` and `terraform apply`.
+1. SSH into the instance.
+1. Run `./install_k3s.sh` and verify `kubectl get nodes`.
+1. Run `./install_helm.sh` and verify `helm version`.
+1. Build/push API image, then `helm install`.
+1. Open `http://<EC2_PUBLIC_IP>:30080` and click **Fetch message**.
