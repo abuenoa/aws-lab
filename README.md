@@ -97,6 +97,7 @@ You can override:
 ### Step 1 — Log in to AWS (Credentials)
 
 You need valid AWS credentials on your machine so Terraform can create resources.
+This step gives Terraform permission to provision EC2 and networking.
 
 **Option A: AWS CLI (recommended)**
 ```
@@ -118,7 +119,8 @@ export AWS_DEFAULT_REGION=eu-west-1
 
 ### Step 2 — Set Terraform Variables
 
-Copy the example file and edit it:
+Copy the example file and edit it. This tells Terraform which region, key pair,
+and instance type to use.
 ```
 cd terraform
 cp terraform.tfvars.example terraform.tfvars
@@ -141,6 +143,8 @@ Terraform will output:
 - `instance_public_ip`
 - `instance_public_dns`
 
+At this point, the EC2 instance and security group exist, but Kubernetes is not installed yet.
+
 ### Step 4 — SSH into the EC2 Instance
 
 ```
@@ -154,7 +158,8 @@ chmod 400 /path/to/your-key.pem
 
 ### Step 4.1 — Clone the repository on the EC2 instance
 
-Install Git and clone the repo (Amazon Linux):
+Install Git and clone the repo (Amazon Linux). This gives the EC2 instance the
+bootstrap scripts and Helm chart.
 ```
 sudo yum install -y git
 git clone https://github.com/<YOUR_ORG>/<YOUR_REPO>.git
@@ -172,6 +177,8 @@ Verify:
 ```
 kubectl get nodes
 ```
+
+This installs a single-node Kubernetes cluster so you can run Helm deployments.
 
 This script is Amazon Linux 2 friendly. It:
 - Skips the SELinux RPM to avoid `container-selinux` conflicts
@@ -217,6 +224,8 @@ sudo chmod 644 /etc/rancher/k3s/k3s.yaml
 helm version
 ```
 
+Helm is the package manager we use to deploy the app to Kubernetes.
+
 ### Step 7 — Deploy the Application with Helm
 
 **Option A (Recommended for class): Use a public prebuilt image**
@@ -254,6 +263,137 @@ http://<EC2_PUBLIC_IP>:30080
 ```
 
 Click **Fetch message** to call the backend.
+
+## Common Errors & How to Fix Them
+
+1. **InvalidKeyPair.NotFound**
+
+Error:
+```
+InvalidKeyPair.NotFound: The key pair 'minishop-key' does not exist
+```
+
+Cause: The EC2 key pair name in `terraform.tfvars` does not exist in the selected AWS region. Key pairs are region-specific.
+
+Fix:
+```
+aws ec2 describe-key-pairs --region <YOUR_REGION>
+```
+If missing, create it:
+```
+aws ec2 create-key-pair \
+  --region <YOUR_REGION> \
+  --key-name minishop-key \
+  --query 'KeyMaterial' \
+  --output text > minishop-key.pem
+chmod 400 minishop-key.pem
+```
+Ensure the name in `terraform.tfvars` matches exactly.
+
+2. **Instance Type Not Free Tier Eligible**
+
+Error:
+```
+The specified instance type is not eligible for Free Tier
+```
+
+Cause: The chosen instance type is not marked as Free Tier eligible in your AWS region.
+
+Fix:
+```
+aws ec2 describe-instance-types \
+  --region <YOUR_REGION> \
+  --filters Name=free-tier-eligible,Values=true \
+  --query "InstanceTypes[].InstanceType"
+```
+Use `t3.micro` (commonly eligible) in `terraform.tfvars`.
+
+3. **Terraform: "No configuration files"**
+
+Error:
+```
+Error: No configuration files
+```
+
+Cause: Terraform was executed in a directory without `.tf` files.
+
+Fix:
+```
+cd terraform
+terraform init
+terraform apply
+```
+
+4. **k3s Installation Fails (Amazon Linux 2 SELinux Conflict)**
+
+Error:
+```
+k3s-selinux requires container-selinux ...
+```
+
+Cause: Amazon Linux 2 may have incompatible `container-selinux` versions.
+
+Fix:
+```
+curl -sfL https://get.k3s.io | INSTALL_K3S_SKIP_SELINUX_RPM=true sh -
+```
+
+5. **kubectl Command Not Found**
+
+Error:
+```
+kubectl: command not found
+```
+
+Cause: k3s installs kubectl internally but does not always expose it in PATH.
+
+Fix:
+```
+sudo ln -s /usr/local/bin/k3s /usr/local/bin/kubectl
+export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+sudo chmod 644 /etc/rancher/k3s/k3s.yaml
+```
+
+6. **Helm: Chart.yaml file is missing**
+
+Error:
+```
+INSTALLATION FAILED: Chart.yaml file is missing
+```
+
+Cause: Helm was executed in the parent folder instead of the chart directory.
+
+Fix:
+```
+cd helm/minishop-chart
+helm install minishop .
+```
+
+7. **ErrImagePull (API Pod Fails)**
+
+Error:
+```
+ErrImagePull
+```
+
+Cause: The Docker image specified in `values.yaml` does not exist, is private, or has a wrong tag.
+
+Fix:
+```
+helm upgrade minishop . \
+  --set api.image.repository=tiangolo/uvicorn-gunicorn-fastapi \
+  --set api.image.tag=python3.11
+```
+Verify:
+```
+kubectl get pods
+```
+
+8. **kubectl get pods -w never ends**
+
+Cause: `-w` means *watch* and keeps streaming updates.
+
+Fix: Press `Ctrl+C` to stop watching, then run `kubectl get pods` again.
 
 ## Learning Lab: What Each Layer Teaches You
 
