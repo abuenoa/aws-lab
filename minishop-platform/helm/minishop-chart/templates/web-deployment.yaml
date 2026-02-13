@@ -1,0 +1,99 @@
+# ConfigMap providing the nginx configuration and index.html
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-web-config
+  labels:
+    app.kubernetes.io/name: minishop-web
+    app.kubernetes.io/instance: {{ .Release.Name }}
+data:
+  nginx.conf: |
+    events {}
+    http {
+      server {
+        listen 80;
+        location / {
+          root /usr/share/nginx/html;
+          index index.html;
+        }
+        # Reverse proxy to the internal API service
+        location /api/ {
+          proxy_pass http://{{ .Release.Name }}-api:{{ .Values.api.service.port }}/;
+        }
+      }
+    }
+  index.html: |
+    <!doctype html>
+    <html lang="en">
+      <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>MiniShop Platform</title>
+        <style>
+          body { font-family: Arial, sans-serif; margin: 40px; }
+          .card { max-width: 520px; padding: 24px; border: 1px solid #ddd; border-radius: 8px; }
+          h1 { margin-top: 0; }
+          button { padding: 8px 12px; }
+          pre { background: #f6f8fa; padding: 12px; border-radius: 6px; }
+        </style>
+      </head>
+      <body>
+        <div class="card">
+          <h1>MiniShop Platform</h1>
+          <p>This page calls the API through the Kubernetes ClusterIP service.</p>
+          <button id="btn">Fetch message</button>
+          <pre id="out">Click the button to call /api/message</pre>
+        </div>
+        <script>
+          const out = document.getElementById('out');
+          document.getElementById('btn').addEventListener('click', async () => {
+            out.textContent = 'Loading...';
+            try {
+              const res = await fetch('/api/message');
+              const data = await res.json();
+              out.textContent = JSON.stringify(data, null, 2);
+            } catch (err) {
+              out.textContent = 'Error: ' + err;
+            }
+          });
+        </script>
+      </body>
+    </html>
+---
+# Deploys the nginx frontend
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-web
+  labels:
+    app.kubernetes.io/name: minishop-web
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  replicas: {{ .Values.web.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: minishop-web
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: minishop-web
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      containers:
+        - name: web
+          image: "{{ .Values.web.image.repository }}:{{ .Values.web.image.tag }}"
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: {{ .Values.web.service.port }}
+          volumeMounts:
+            - name: web-config
+              mountPath: /etc/nginx/nginx.conf
+              subPath: nginx.conf
+            - name: web-config
+              mountPath: /usr/share/nginx/html/index.html
+              subPath: index.html
+      volumes:
+        - name: web-config
+          configMap:
+            name: {{ .Release.Name }}-web-config
