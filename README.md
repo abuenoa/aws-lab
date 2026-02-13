@@ -4,14 +4,14 @@
 
 Terraform → EC2 (Free Tier) → k3s (single-node Kubernetes) → Helm → App deployment
 
-The demo deploys a tiny FastAPI backend and an nginx web frontend to a single `t2.micro` instance.
+The demo deploys a tiny FastAPI backend and an nginx web frontend to a single `t3.micro` instance.
 
 **What you get**
 - AWS infrastructure created by Terraform
 - A k3s Kubernetes cluster on EC2
 - Helm-based application deployment
 - A simple web page calling an internal API
- - A local Docker Compose option for quick testing
+- A local Docker Compose option for quick testing
 
 ## Architecture (ASCII)
 
@@ -24,7 +24,7 @@ The demo deploys a tiny FastAPI backend and an nginx web frontend to a single `t
                                   v
 +------------------+    +---------+---------+    +------------------+
 |   AWS EC2        |    |  k3s Node        |    |   Kubernetes     |
-|  t2.micro        |----|  (single node)   |----|   Services       |
+|  t3.micro        |----|  (single node)   |----|   Services       |
 |  Security Group  |    |                 |    |                  |
 +------------------+    |  Web (nginx)    |    |  ClusterIP API   |
                          |  API (FastAPI) |    +------------------+
@@ -38,7 +38,15 @@ The demo deploys a tiny FastAPI backend and an nginx web frontend to a single `t
 - Terraform installed
 - SSH client
 - Docker and Docker Compose (for local testing)
- - (Optional) AWS CLI installed for `aws configure`
+- (Optional) AWS CLI installed for `aws configure`
+
+## Execution Model (Local vs EC2)
+
+To avoid confusion, the lab is split into two execution environments:
+
+- **Local machine**: Configure AWS credentials, run `terraform init/apply/destroy`, and (optionally) build/push the API image.
+- **EC2 instance**: Install k3s, install Helm, and run `helm install/upgrade` + `kubectl` commands.
+- **Image registry**: The API image must be stored in a registry that the EC2 instance can pull from (Docker Hub, GHCR, or ECR).
 
 ## Configuration (Externalized Inputs)
 
@@ -56,7 +64,7 @@ Option B — Environment variables:
 ```
 export AWS_ACCESS_KEY_ID=YOUR_KEY
 export AWS_SECRET_ACCESS_KEY=YOUR_SECRET
-export AWS_DEFAULT_REGION=us-east-1
+export AWS_DEFAULT_REGION=eu-west-1
 ```
 
 **Terraform variables**
@@ -69,6 +77,8 @@ cp terraform.tfvars.example terraform.tfvars
 Update `terraform.tfvars` with:
 - `ssh_key_name`: your EC2 key pair name
 - `ssh_cidr`: your public IP in CIDR notation (e.g., `203.0.113.10/32`)
+- `instance_type`: instance size (default `t3.micro`)
+- `aws_region`: AWS region (e.g., `eu-west-1`)
 
 **Docker Compose (local lab)**
 
@@ -82,6 +92,132 @@ You can override:
 - `API_IMAGE`, `API_TAG` for the backend image
 - `API_PORT`, `WEB_PORT` for local ports
 
+## Step-by-Step Deployment (Detailed)
+
+### Step 1 — Log in to AWS (Credentials)
+
+You need valid AWS credentials on your machine so Terraform can create resources.
+
+**Option A: AWS CLI (recommended)**
+```
+aws configure
+```
+
+It will prompt for:
+- AWS Access Key ID
+- AWS Secret Access Key
+- Default region (e.g., `us-east-1`)
+- Output format (you can leave it blank)
+
+**Option B: Environment variables**
+```
+export AWS_ACCESS_KEY_ID=YOUR_KEY
+export AWS_SECRET_ACCESS_KEY=YOUR_SECRET
+export AWS_DEFAULT_REGION=eu-west-1
+```
+
+### Step 2 — Set Terraform Variables
+
+Copy the example file and edit it:
+```
+cd minishop-platform/terraform
+cp terraform.tfvars.example terraform.tfvars
+```
+
+Update these fields in `terraform.tfvars`:
+- `aws_region`: region for the EC2 instance
+- `ssh_key_name`: the exact name of your EC2 key pair
+- `ssh_cidr`: your public IP in CIDR notation (e.g., `X.X.X.X/32`)
+- `instance_type`: defaults to `t3.micro` (Free Tier eligible)
+
+### Step 3 — Provision Infrastructure
+
+```
+terraform init
+terraform apply
+```
+
+Terraform will output:
+- `instance_public_ip`
+- `instance_public_dns`
+
+### Step 4 — SSH into the EC2 Instance
+
+```
+ssh -i /path/to/your-key.pem ec2-user@<EC2_PUBLIC_IP>
+```
+
+If you get a permission error, ensure your `.pem` has correct permissions:
+```
+chmod 400 /path/to/your-key.pem
+```
+
+### Step 4.1 — Clone the repository on the EC2 instance
+
+Install Git and clone the repo (Amazon Linux):
+```
+sudo yum install -y git
+git clone https://github.com/<YOUR_ORG>/<YOUR_REPO>.git
+cd <YOUR_REPO>/minishop-platform
+```
+
+### Step 5 — Install k3s
+
+```
+cd bootstrap
+./install_k3s.sh
+```
+
+Verify:
+```
+kubectl get nodes
+```
+
+### Step 6 — Install Helm
+
+```
+./install_helm.sh
+helm version
+```
+
+### Step 7 — Deploy the Application with Helm
+
+**Option A (Recommended for class): Use a public prebuilt image**
+
+This avoids installing Docker on the EC2 instance.
+```
+cd helm/minishop-chart
+helm install minishop . \
+  --set api.image.repository=ghcr.io/abuenoa/minishop-api \
+  --set api.image.tag=latest
+```
+
+**Option B (Advanced): Build and push your own image**
+
+Build on your **local machine**, then push to Docker Hub or GHCR:
+```
+cd minishop-platform/app/api
+# docker build -t ghcr.io/your-org/minishop-api:latest .
+# docker push ghcr.io/your-org/minishop-api:latest
+```
+
+Then deploy from the EC2 instance:
+```
+cd helm/minishop-chart
+helm install minishop . \
+  --set api.image.repository=ghcr.io/your-org/minishop-api \
+  --set api.image.tag=latest
+```
+
+### Step 8 — Access the Application
+
+Open in your browser:
+```
+http://<EC2_PUBLIC_IP>:30080
+```
+
+Click **Fetch message** to call the backend.
+
 ## Learning Lab: What Each Layer Teaches You
 
 - **Terraform (IaC)**: Reproducible infrastructure. You define *what* you want (EC2, security group) and Terraform makes it real, reliably and repeatably.
@@ -89,81 +225,6 @@ You can override:
 - **k3s (Kubernetes)**: A lightweight, production-grade Kubernetes distribution that fits a single Free Tier instance.
 - **Helm (Packaging)**: A standard way to package and deploy Kubernetes apps with configurable values.
 - **App (FastAPI + nginx)**: A minimal but realistic two-tier application that demonstrates service discovery and internal routing.
-
-## Step-by-Step Deployment
-
-### Step 1 — Configure AWS credentials
-
-Set up your AWS credentials so Terraform can create resources.
-
-```
-export AWS_ACCESS_KEY_ID=YOUR_KEY
-export AWS_SECRET_ACCESS_KEY=YOUR_SECRET
-export AWS_DEFAULT_REGION=us-east-1
-```
-
-### Step 2 — Terraform init / apply
-
-```
-cd minishop-platform/terraform
-cp terraform.tfvars.example terraform.tfvars
-
-# Edit terraform.tfvars with your key pair name and IP
-terraform init
-terraform apply
-```
-
-Terraform will output the EC2 public IP after apply.
-
-### Step 3 — SSH into instance
-
-```
-ssh -i /path/to/your-key.pem ec2-user@<EC2_PUBLIC_IP>
-```
-
-### Step 4 — Install k3s
-
-```
-cd minishop-platform/bootstrap
-./install_k3s.sh
-```
-
-### Step 5 — Install Helm
-
-```
-./install_helm.sh
-```
-
-### Step 6 — Deploy Helm chart
-
-Build and push the API image (example):
-
-```
-cd minishop-platform/app/api
-# docker build -t ghcr.io/your-org/minishop-api:latest .
-# docker push ghcr.io/your-org/minishop-api:latest
-```
-
-Then deploy the chart:
-
-```
-cd minishop-platform/helm/minishop-chart
-helm install minishop . \
-  --set api.image.repository=ghcr.io/your-org/minishop-api \
-  --set api.image.tag=latest
-```
-
-The web service is exposed via NodePort `30080` by default.
-
-### Step 7 — Access the application
-
-In your browser:
-
-```
-http://<EC2_PUBLIC_IP>:30080
-```
-
-Click **Fetch message** to call the API.
 
 ## Local Lab: Run Everything with Docker Compose
 
@@ -234,14 +295,21 @@ Click **Fetch message**. This tests:
 
 ## Cleanup (Destroy All Resources)
 
+Run this **locally** where you executed Terraform:
 ```
 cd minishop-platform/terraform
 terraform destroy
 ```
 
+Verify cleanup:
+- AWS Console: no running EC2 instance
+- Security group removed
+- Key pair remains (delete it manually only if you want)
+```
+
 ## Cost-Safety Notes (Free Tier)
 
-- This project uses **one `t2.micro`** instance and the default VPC.
+- This project uses **one `t3.micro`** instance and the default VPC.
 - Keep the instance running only while you are practicing.
 - Always run `terraform destroy` when finished.
 
